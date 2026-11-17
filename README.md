@@ -27,6 +27,10 @@ Volunteers at each station tap HIT or MISS on their own phones. Scores save on t
 Requirements: Node 20+, pnpm 9+, and (for the database) the Supabase CLI with Docker.
 
 ```bash
+# one-time setup on a Mac
+brew install node        # or with asdf: asdf install (reads .tool-versions)
+npm install -g pnpm      # or: brew install pnpm
+
 pnpm install
 pnpm test          # core rules + app tests
 pnpm typecheck
