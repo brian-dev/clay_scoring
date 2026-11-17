@@ -249,4 +249,71 @@ reset role;
 select tests.assert((select count(*) from public.standings_builds where event_id = :ev) = 1, 'confirm/dispute/correction requested a standings build');
 select tests.assert((select last_seen > now() - interval '1 minute' from public.devices where id = 'cccccccc-0000-4000-8000-000000000001'), 'device check-in recorded');
 
+\echo '--- registration import (admin)'
+select tests.login('aaaaaaaa-0000-4000-8000-0000000000ad', false);
+set role authenticated;
+do $$
+declare v uuid; res jsonb;
+begin
+  select id into v from public.events where join_code = 'TEST01';
+  insert into public.divisions (event_id, name, sort_order) values (v, 'Adult Male', 1), (v, 'Junior Female', 2);
+
+  res := public.import_registrations(v, '[
+    {"first_name": "", "last_name": "Nobody"},
+    {"first_name": "Al", "division": "Senior"},
+    {"first_name": "Bo", "squad": "two"},
+    {"first_name": "Cy", "squad": "1", "shoot_order": "1"},
+    {"first_name": "Di", "squad": "1", "shoot_order": "1"}
+  ]'::jsonb);
+  perform tests.assert((res ->> 'ok')::boolean = false, 'invalid import is refused');
+  perform tests.assert(jsonb_array_length(res -> 'errors') = 4, 'every problem is reported with its row');
+  perform tests.assert((select count(*) from public.shooters where event_id = v) = 0, 'nothing is saved when any row is invalid');
+
+  res := public.import_registrations(v, '[
+    {"first_name": "Ray", "last_name": "Delgado", "division": "adult male", "team": "Sponsor Team A", "squad": "1", "shoot_order": "2", "email": "ray@example.com"},
+    {"first_name": "Emma", "last_name": "Ruiz", "is_minor": true, "division": "Junior Female", "team": "Sponsor Team A", "squad": "1"},
+    {"first_name": "Gus", "last_name": "Holloway", "division": "Adult Male", "squad": "2"},
+    {"first_name": "Walk", "last_name": "Up"}
+  ]'::jsonb);
+  perform tests.assert((res ->> 'ok')::boolean, 'valid import succeeds');
+  perform tests.assert((res ->> 'shooters')::int = 4 and (res ->> 'teams_created')::int = 1 and (res ->> 'squads_created')::int = 2,
+    'import creates shooters, missing teams and squads');
+  perform tests.assert((select m.shoot_order from public.squad_members m join public.shooters s on s.id = m.shooter_id where s.first_name = 'Ray') = 2,
+    'requested shooting order is kept');
+  perform tests.assert((select m.shoot_order from public.squad_members m join public.shooters s on s.id = m.shooter_id where s.first_name = 'Emma') = 3,
+    'missing shooting order goes to the end of the squad');
+  perform tests.assert((select is_minor from public.shooters where first_name = 'Emma' and event_id = v), 'minor flag imported');
+  perform tests.assert((select count(*) from public.shooter_contacts where event_id = v) = 1, 'contact details stored separately');
+  perform tests.assert(not exists (select 1 from public.squad_members m join public.shooters s on s.id = m.shooter_id where s.first_name = 'Walk'),
+    'shooters without a squad are imported unsquadded');
+
+  perform public.set_event_pins(v, '4321', '8765');
+  perform tests.expect_error(format($f$select public.set_event_pins(%L, '1111', '1111')$f$, v), 'must differ');
+end $$;
+reset role;
+
+select tests.login('bbbbbbbb-0000-4000-8000-000000000001', true);  -- scorer on SLAYIN
+set role authenticated;
+select tests.expect_error($$select public.import_registrations('00000000-0000-4000-8000-000000000001', '[{"first_name":"X"}]')$$, 'Only an event admin');
+select tests.expect_error($$select public.set_event_pins('00000000-0000-4000-8000-000000000001', '1111', '2222')$$, 'Only an event admin');
+select tests.assert(public.open_disputes('00000000-0000-4000-8000-000000000001') is null, 'scorers cannot list the dispute queue');
+select tests.expect_error($$select public.shooter_station_scores('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-0000000005a1')$$, 'Only a referee');
+do $$ begin perform public.raise_dispute('00000000-0000-4000-8000-0000000000a1', '00000000-0000-4000-8000-0000000005a1', '00000000-0000-4000-8000-000000000102', 'Second look please'); end $$;
+reset role;
+
+\echo '--- referee views'
+select tests.login('dddddddd-0000-4000-8000-000000000001', true);  -- referee on SLAYIN
+set role authenticated;
+do $$
+declare q jsonb; sc jsonb;
+begin
+  q := public.open_disputes('00000000-0000-4000-8000-000000000001');
+  perform tests.assert(jsonb_array_length(q) = 1, 'referee sees the open dispute');
+  perform tests.assert(q -> 0 ->> 'first_name' = 'Kaden' and (q -> 0 ->> 'station_number')::int = 1, 'dispute shows shooter and station');
+  sc := public.shooter_station_scores('00000000-0000-4000-8000-000000000101', '00000000-0000-4000-8000-0000000005a1');
+  perform tests.assert(jsonb_array_length(sc) = 8, 'referee sees all 8 effective scores');
+  perform tests.assert(sc -> 2 ->> 'result' = 'hit', 'shows the corrected result for target 3');
+end $$;
+reset role;
+
 \echo 'ALL DATABASE TESTS PASSED'
