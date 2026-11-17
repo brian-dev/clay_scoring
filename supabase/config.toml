@@ -1,0 +1,31 @@
+# Local Supabase settings (used by `npx supabase start`).
+project_id = "clay_scoring"
+
+[api]
+port = 54321
+schemas = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+port = 54323
+
+[auth]
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:4173"]
+# Volunteers sign in anonymously, then join an event with its code + PIN.
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[storage]
+file_size_limit = "5MiB"
+
+[functions.build-standings]
+# Called by the database with a shared secret header, not a user JWT.
+verify_jwt = false
