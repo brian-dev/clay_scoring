@@ -81,9 +81,11 @@ export function demoStandings(tick: number, now = new Date()): StandingsOutput {
       const st = stations[(q + k) % stations.length]!;
       confirmations.push({ squadId: squad.id, stationId: st.id, status: 'confirmed' });
       for (const sid of squad.shooterIds) {
-        const skill = 0.55 + 0.4 * rand(Number(sid.slice(2)));
+        const n = Number(sid.slice(2));
+        // Base skill plus station-to-station form, so the lead changes hands during the demo.
+        const skill = 0.6 + 0.25 * rand(n) + 0.3 * (rand(n * 77 + st.number * 13) - 0.5);
         for (let t = 1; t <= st.targetCount; t++) {
-          const hit = rand(Number(sid.slice(2)) * 1000 + st.number * 37 + t) < skill;
+          const hit = rand(n * 1000 + st.number * 37 + t) < skill;
           scores.push({
             id: `${sid}-${st.id}-${t}`,
             shooterId: sid,
