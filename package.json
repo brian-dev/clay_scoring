@@ -1,0 +1,16 @@
+{
+  "name": "clay-scoring",
+  "private": true,
+  "description": "Digital station scoring and live leaderboards for the Slayin' Clays sporting clays fundraiser.",
+  "packageManager": "pnpm@10.0.0",
+  "scripts": {
+    "dev": "pnpm --filter @slayin/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:test": "bash supabase/tests/run.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
