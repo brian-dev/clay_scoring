@@ -12,7 +12,7 @@ Volunteers at each station tap HIT or MISS on their own phones. Scores save on t
 | Path | What it is |
 | --- | --- |
 | `packages/core` | Pure TypeScript scoring rules: effective scores, totals, rankings, countback, Lewis Class, minor display names, standings file builder. Shared by the app and the standings publisher. |
-| `apps/web` | React + TypeScript + Vite app: scorer PWA, leaderboards, TV view, admin and referee consoles. |
+| `apps/web` | React + TypeScript + Vite app: scorer PWA (`/score`), leaderboards (`/board`, `/me/<squad>`), TV view (`/tv`), referee queue (`/referee`) and organizer console with registration import and printable QR cards (`/admin`). |
 | `supabase/` | Database migrations, row-level security, RPCs, seed data, and the `build-standings` Edge Function. |
 
 ## Key rules (enforced in code and tests)

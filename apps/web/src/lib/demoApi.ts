@@ -1,4 +1,4 @@
-import { UserFacingError, type ScoringApi, type SquadInfo } from './api.ts';
+import { UserFacingError, type DisputeView, type ScoringApi, type SquadInfo, type TargetScore } from './api.ts';
 import type { ConfirmPayload, DisputePayload, TapPayload } from './outbox.ts';
 import { TransportError, type TapResult, type Transport } from './sync.ts';
 import type { StationInfo } from '../scorer/stationScoring.ts';
@@ -41,8 +41,41 @@ const squads: Record<string, SquadInfo> = {
   },
 };
 
-class DemoTransport implements Transport {
-  private stored = new Map<string, TapPayload>();
+interface DemoDispute {
+  id: string;
+  squadId: string;
+  stationId: string;
+  shooterId: string;
+  note: string;
+  raisedAt: string;
+  resolved: boolean;
+}
+
+interface DemoStore {
+  taps: (TapPayload & { serverTs: string })[];
+  confirmed: string[];
+  disputes: DemoDispute[];
+}
+
+const STORE_KEY = 'cs.demo.scoring';
+
+/** Demo "server": keeps taps, confirmations and disputes in localStorage so the referee page can see them. */
+class DemoServer implements Transport {
+  store: DemoStore;
+  constructor() {
+    try {
+      this.store = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null') ?? { taps: [], confirmed: [], disputes: [] };
+    } catch {
+      this.store = { taps: [], confirmed: [], disputes: [] };
+    }
+  }
+  private save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(this.store));
+    } catch {
+      /* memory only */
+    }
+  }
   /** Flip from the dev console to rehearse "no signal": window.__demoOffline = true */
   private get offline() {
     return typeof window !== 'undefined' && (window as unknown as { __demoOffline?: boolean }).__demoOffline === true;
@@ -51,26 +84,57 @@ class DemoTransport implements Transport {
     await new Promise((r) => setTimeout(r, 150));
     if (this.offline) throw new TransportError('Failed to fetch', true);
   }
+  private locked(squadId: string, stationId: string) {
+    return this.store.confirmed.includes(`${squadId}|${stationId}`) || this.store.disputes.some((d) => d.squadId === squadId && d.stationId === stationId);
+  }
   async recordTaps(taps: TapPayload[]): Promise<TapResult[]> {
     await this.latency();
-    return taps.map((t) => {
-      if (this.stored.has(t.id)) return { id: t.id, status: 'duplicate' };
-      this.stored.set(t.id, t);
+    const results = taps.map((t): TapResult => {
+      if (this.store.taps.some((x) => x.id === t.id)) return { id: t.id, status: 'duplicate' };
+      if (t.kind === 'official' && this.locked(t.squad_id, t.station_id) && !(t.supersedes_id && t.reason)) {
+        return { id: t.id, status: 'rejected', reason: 'station already confirmed; a referee correction with a reason is required' };
+      }
+      this.store.taps.push({ ...t, serverTs: new Date().toISOString() });
       return { id: t.id, status: 'ok' };
     });
+    this.save();
+    return results;
   }
-  async confirmStation(_p: ConfirmPayload) {
+  async confirmStation(p: ConfirmPayload) {
     await this.latency();
+    this.store.confirmed.push(`${p.squad_id}|${p.station_id}`);
+    this.save();
   }
-  async raiseDispute(_p: DisputePayload) {
+  async raiseDispute(p: DisputePayload) {
     await this.latency();
+    this.store.disputes.push({
+      id: `dp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      squadId: p.squad_id,
+      stationId: p.station_id,
+      shooterId: p.shooter_id,
+      note: p.note,
+      raisedAt: new Date().toISOString(),
+      resolved: false,
+    });
+    this.save();
+  }
+  scores(shooterId: string, stationId: string): TargetScore[] {
+    const mine = this.store.taps.filter((t) => t.shooter_id === shooterId && t.station_id === stationId && t.kind === 'official');
+    const superseded = new Set(mine.map((t) => t.supersedes_id).filter(Boolean));
+    const byTarget = new Map<number, TargetScore>();
+    for (const t of mine) if (!superseded.has(t.id)) byTarget.set(t.target_no, { targetNo: t.target_no, result: t.result, recordId: t.id });
+    return [...byTarget.values()].sort((a, b) => a.targetNo - b.targetNo);
   }
 }
 
+const stationById = (id: string) => Object.values(stations).find((s) => s.id === id);
+const squadById = (id: string) => Object.values(squads).find((q) => q.id === id);
+
 export function createDemoApi(): ScoringApi {
+  const server = new DemoServer();
   return {
     mode: 'demo',
-    transport: new DemoTransport(),
+    transport: server,
     async join(joinCode, pin, displayName) {
       if (!displayName.trim()) throw new UserFacingError('Please enter your name.');
       if (joinCode.trim().toUpperCase() !== 'SLAYIN' || (pin !== '1234' && pin !== '5678')) {
@@ -93,6 +157,31 @@ export function createDemoApi(): ScoringApi {
       const sq = squads[token];
       if (!sq) throw new UserFacingError('Unknown squad card.');
       return sq;
+    },
+    async listDisputes(): Promise<DisputeView[]> {
+      return server.store.disputes
+        .filter((d) => !d.resolved)
+        .map((d) => {
+          const st = stationById(d.stationId);
+          const sq = squadById(d.squadId);
+          const sh = sq?.shooters.find((x) => x.id === d.shooterId);
+          return {
+            id: d.id, raisedAt: d.raisedAt, note: d.note || null, raisedBy: 'Station scorer',
+            squadId: d.squadId, squadNumber: sq?.number ?? 0,
+            stationId: d.stationId, stationNumber: st?.number ?? 0, stationName: st?.name ?? '', targetCount: st?.targetCount ?? 0,
+            shooterId: d.shooterId, firstName: sh?.firstName ?? '', lastName: sh?.lastName ?? '', isMinor: sh?.isMinor ?? false,
+          };
+        });
+    },
+    async stationScores(shooterId, stationId) {
+      return server.scores(shooterId, stationId);
+    },
+    async resolveDispute(disputeId, _resolution, reason) {
+      if (!reason.trim()) throw new UserFacingError('Choose upheld or changed and give a reason.');
+      const d = server.store.disputes.find((x) => x.id === disputeId);
+      if (!d || d.resolved) throw new UserFacingError('This dispute is already settled.');
+      d.resolved = true;
+      localStorage.setItem('cs.demo.scoring', JSON.stringify(server.store));
     },
   };
 }

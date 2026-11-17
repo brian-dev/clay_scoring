@@ -1,9 +1,12 @@
 import { Link, Navigate, Route, Routes } from 'react-router-dom';
+import { AdminApp } from './admin/AdminApp.tsx';
+import { PrintPage } from './admin/PrintPage.tsx';
 import { BoardPage } from './board/BoardPage.tsx';
 import { SquadPage } from './board/SquadPage.tsx';
 import { TvPage } from './board/TvPage.tsx';
 import { Band } from './components/Brand.tsx';
 import { isDemo } from './lib/env.ts';
+import { RefereeApp } from './referee/RefereeApp.tsx';
 import { ScorerApp } from './scorer/ScorerApp.tsx';
 
 function Home() {
@@ -15,6 +18,8 @@ function Home() {
         <Link className="btn btn-clay btn-block" to="/board">Live leaderboard</Link>
         <Link className="btn btn-ink btn-block" to="/score">Volunteer scoring</Link>
         <Link className="btn btn-line btn-block" to="/tv">Clubhouse TV view</Link>
+        <Link className="btn btn-line btn-block" to="/referee">Referee</Link>
+        <Link className="btn btn-line btn-block" to="/admin">Organizers</Link>
       </main>
     </>
   );
@@ -28,6 +33,10 @@ export function App() {
       <Route path="/board" element={<BoardPage />} />
       <Route path="/me/:token" element={<SquadPage />} />
       <Route path="/tv" element={<TvPage />} />
+      <Route path="/referee" element={<RefereeApp />} />
+      <Route path="/admin" element={<AdminApp />} />
+      <Route path="/admin/:eventId/print/:kind" element={<PrintPage />} />
+      <Route path="/admin/:eventId/:tab?" element={<AdminApp />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

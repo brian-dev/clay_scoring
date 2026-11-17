@@ -11,6 +11,8 @@ With no Supabase settings, the app runs entirely in the browser with made-up dat
 
 - **Scoring:** open `/score`, event code `SLAYIN`, scorer PIN `1234` (referee `5678`). Type station codes `station-1`…`station-5` and squad codes `squad-1`, `squad-2`, `squad-3` or `squad-practice`.
 - **Boards:** `/board`, `/tv` and `/me/squad-4` show a simulated shoot that advances one station every poll.
+- **Organizers:** `/admin` opens the demo event: settings, stations, divisions, registration import (paste a CSV), squads, and printable squad cards and station signs.
+- **Referee:** sign in at `/score` with PIN `5678`, then open `/referee` to settle disputes raised by scorers.
 - **Rehearse no signal:** in the browser console run `window.__demoOffline = true`, tap some targets, then set it back to `false`.
 
 ## Tests
@@ -44,6 +46,14 @@ curl -X POST http://127.0.0.1:54321/functions/v1/build-standings \
   -H "x-standings-secret: $STANDINGS_SECRET" -H 'content-type: application/json' \
   -d '{"event_id":"00000000-0000-4000-8000-000000000001"}'
 ```
+
+## Event setup (organizers)
+
+1. Create an organizer account at `/admin` and create the event (name, event code, scorer and referee PINs).
+2. **Stations:** add each station with its target count and presentation (pairs need an even count).
+3. **Divisions:** one click adds the 2026 divisions (Adult, Intermediate 13–18, Junior 12 & under, each male and female).
+4. **Registration:** export the sign-up list as CSV and paste or upload it. Columns are matched automatically; with Age + Gender columns, divisions are assigned for you. Nothing is saved if any row has an error. Minors are always shown as "First L.".
+5. **Squads & printing:** assign start stations, add the practice squad, then print squad cards (4 per page) and station signs (1 per page) with the browser's Print → Save as PDF.
 
 ## How the pieces fit
 

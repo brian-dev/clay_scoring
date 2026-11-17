@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Band } from '../components/Brand.tsx';
 import { InstallBanner } from '../components/InstallBanner.tsx';
 import { QrScan } from '../components/QrScan.tsx';
@@ -125,6 +125,10 @@ export function ScorerApp() {
               }}
             />
           </>
+        )}
+
+        {session && session.role !== 'scorer' && (
+          <Link className="btn btn-ink btn-block" to="/referee">Open the referee dispute queue</Link>
         )}
 
         {session && !station && (

@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { toSquad, toStation, UserFacingError, type RawSquad, type RawStation, type ScoringApi, type StaffSession } from './api.ts';
+import { toDispute, toSquad, toStation, UserFacingError, type RawDispute, type RawSquad, type RawStation, type ScoringApi, type StaffSession } from './api.ts';
 import type { ConfirmPayload, DisputePayload, TapPayload } from './outbox.ts';
 import { TransportError, type TapResult, type Transport } from './sync.ts';
 
@@ -81,6 +81,28 @@ export function createSupabaseApi(url: string, anonKey: string): ScoringApi {
       const { data, error } = await client.rpc('squad_by_token', { p_squad_token: squadToken });
       if (error) throw userError(error);
       return toSquad(data as RawSquad);
+    },
+
+    async listDisputes(eventId) {
+      const { data, error } = await client.rpc('open_disputes', { p_event: eventId });
+      if (error) throw userError(error);
+      if (data === null) throw new UserFacingError('Sign in with the referee PIN to see disputes.');
+      return (data as RawDispute[]).map(toDispute);
+    },
+
+    async stationScores(shooterId, stationId) {
+      const { data, error } = await client.rpc('shooter_station_scores', { p_shooter: shooterId, p_station: stationId });
+      if (error) throw userError(error);
+      return (data as { target_no: number; result: 'hit' | 'miss'; record_id: string }[]).map((r) => ({
+        targetNo: r.target_no,
+        result: r.result,
+        recordId: r.record_id,
+      }));
+    },
+
+    async resolveDispute(disputeId, resolution, reason) {
+      const { error } = await client.rpc('resolve_dispute', { p_dispute_id: disputeId, p_resolution: resolution, p_reason: reason });
+      if (error) throw userError(error);
     },
   };
 }

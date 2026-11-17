@@ -1,3 +1,6 @@
+import type { AdminApi } from '../admin/adminApi.ts';
+import { createDemoAdminApi } from '../admin/demoAdminApi.ts';
+import { createSupabaseAdminApi } from '../admin/supabaseAdminApi.ts';
 import type { ScoringApi } from './api.ts';
 import { createDemoApi } from './demoApi.ts';
 import { createSupabaseApi } from './supabaseApi.ts';
@@ -20,4 +23,11 @@ export function getApi(): ScoringApi {
 export function standingsUrl(path: string): string | null {
   if (isDemo || !PUBLIC_EVENT_ID) return null;
   return `${SUPABASE_URL}/storage/v1/object/public/standings/${PUBLIC_EVENT_ID}/${path}`;
+}
+
+
+let adminApi: AdminApi | null = null;
+export function getAdminApi(): AdminApi {
+  adminApi ??= isDemo ? createDemoAdminApi() : createSupabaseAdminApi(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return adminApi;
 }

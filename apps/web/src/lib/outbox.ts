@@ -25,6 +25,8 @@ export interface TapPayload {
   device_id: string;
   device_ts: string;
   supersedes_id?: string;
+  /** Required when a referee corrects a confirmed or disputed station. */
+  reason?: string;
 }
 
 export interface ConfirmPayload {
